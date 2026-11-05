@@ -1,1 +1,1 @@
-from . import start, catalog, payment
+from . import start, catalog, payment, admin

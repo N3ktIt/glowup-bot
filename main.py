@@ -5,10 +5,11 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 
 import config
 import database
-from handlers import start, catalog, payment
+from handlers import start, catalog, payment, admin
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,10 +28,11 @@ async def start_web_server():
 
 async def main():
     bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())
 
     await database.init_db()
 
+    dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(catalog.router)
     dp.include_router(payment.router)

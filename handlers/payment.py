@@ -6,20 +6,24 @@ import uuid
 import config
 import database
 import keyboards as kb
+from keyboards import get_title
+from texts import t
 
 router = Router()
 
 @router.callback_query(F.data.startswith("buy_"))
 async def create_invoice(call: CallbackQuery):
+    lang = await database.get_user_lang(call.from_user.id)
     instr_id = int(call.data.split("_")[1])
     instr = await database.get_instruction(instr_id)
     if not instr:
-        await call.answer("Instruction not found", show_alert=True)
+        await call.answer(t(lang, 'not_found'), show_alert=True)
         return
-    
+
     order_id = str(uuid.uuid4())
     price = float(instr['price'])
-    
+    title = get_title(instr, lang)
+
     url = "https://api.nowpayments.io/v1/invoice"
     headers = {
         "x-api-key": config.NOWPAYMENTS_API_KEY,
@@ -29,25 +33,27 @@ async def create_invoice(call: CallbackQuery):
         "price_amount": price,
         "price_currency": "usd",
         "order_id": order_id,
-        "order_description": f"GlowUp Center - {instr['title']}",
-        "ipn_callback_url": f"{config.WEBHOOK_URL}/ipn",
+        "order_description": f"GlowUp Center - {get_title(instr, 'en')}",
+        "ipn_callback_url": f"{config.WEBHOOK_URL}/ipn" if config.WEBHOOK_URL else "",
         "success_url": f"https://t.me/{(await call.bot.get_me()).username}",
         "cancel_url": f"https://t.me/{(await call.bot.get_me()).username}"
     }
-    
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload) as resp:
                 data = await resp.json()
-                if resp.status == 200 and data.get("invoice_url"):
+                if resp.status in (200, 201) and data.get("invoice_url"):
                     pay_url = data["invoice_url"]
                     payment_id = order_id
                     await database.create_payment(call.from_user.id, instr_id, payment_id, price)
-                    text = f"💳 Invoice created for {instr['title']}\n\nAmount: ${price:.2f} USD\n\nClick 'Pay Now' to complete payment with crypto."
-                    await call.message.edit_text(text, reply_markup=kb.pay_kb(pay_url, payment_id))
+                    text = t(lang, 'invoice_created', title=title, price=price)
+                    await call.message.edit_text(text, reply_markup=kb.pay_kb(pay_url, payment_id, lang))
                     await call.answer()
                 else:
-                    await call.answer("Failed to create invoice. Try again later.", show_alert=True)
+                    err = data.get('message') or data.get('error') or 'Failed'
+                    await call.answer(f"Payment error: {err}", show_alert=True)
+                    print(data)
     except Exception as e:
         await call.answer("Error creating payment", show_alert=True)
         print(e)
