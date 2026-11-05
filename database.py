@@ -51,6 +51,15 @@ async def add_user(user_id, username, first_name):
     async with aiosqlite.connect(config.DATABASE_NAME) as db:
         await db.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, lang) VALUES (?,?,?,?)",
                          (user_id, username, first_name, 'en'))
+        # Update username/name if changed, but keep lang
+        await db.execute("UPDATE users SET username=COALESCE(?, username), first_name=COALESCE(?, first_name) WHERE user_id=?",
+                         (username, first_name, user_id))
+        await db.commit()
+
+async def ensure_user(user_id, username=None, first_name=None):
+    async with aiosqlite.connect(config.DATABASE_NAME) as db:
+        await db.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, lang) VALUES (?,?,?,?)",
+                         (user_id, username, first_name, 'en'))
         await db.commit()
 
 async def get_user_lang(user_id):
@@ -61,6 +70,7 @@ async def get_user_lang(user_id):
 
 async def set_user_lang(user_id, lang):
     async with aiosqlite.connect(config.DATABASE_NAME) as db:
+        await db.execute("INSERT OR IGNORE INTO users (user_id, lang) VALUES (?,?)", (user_id, lang))
         await db.execute("UPDATE users SET lang=? WHERE user_id=?", (lang, user_id))
         await db.commit()
 

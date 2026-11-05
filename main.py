@@ -2,16 +2,28 @@ import asyncio
 import logging
 from aiohttp import web
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, BaseMiddleware
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import TelegramObject, Message, CallbackQuery
+from typing import Any, Awaitable, Callable, Dict
 
 import config
 import database
 from handlers import start, catalog, payment, admin
 
 logging.basicConfig(level=logging.INFO)
+
+class EnsureUserMiddleware(BaseMiddleware):
+    async def __call__(self, handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]], event: TelegramObject, data: Dict[str, Any]) -> Any:
+        user = data.get('event_from_user')
+        if user:
+            try:
+                await database.ensure_user(user.id, user.username, user.first_name)
+            except Exception:
+                pass
+        return await handler(event, data)
 
 async def health(request):
     return web.Response(text="OK")
@@ -31,6 +43,8 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
 
     await database.init_db()
+
+    dp.update.middleware(EnsureUserMiddleware())
 
     dp.include_router(admin.router)
     dp.include_router(start.router)
