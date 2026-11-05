@@ -26,33 +26,43 @@ async def cmd_add(message: Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
     await state.set_state(AddInstruction.title_en)
-    await message.answer("Admin: Add instruction\n\nStep 1/7: Title (EN)")
+    await message.answer("Admin: Add instruction\n\nStep 1/7: Title (EN)\nSend /cancel to stop.")
 
-@router.message(AddInstruction.title_en)
+@router.message(Command("cancel"))
+async def cancel(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    current = await state.get_state()
+    if current is None:
+        return
+    await state.clear()
+    await message.answer("Cancelled.")
+
+@router.message(AddInstruction.title_en, F.text, ~F.text.startswith('/'))
 async def add_title_en(message: Message, state: FSMContext):
     await state.update_data(title_en=message.text.strip())
     await state.set_state(AddInstruction.title_ru)
     await message.answer("Step 2/7: Title (RU)")
 
-@router.message(AddInstruction.title_ru)
+@router.message(AddInstruction.title_ru, F.text, ~F.text.startswith('/'))
 async def add_title_ru(message: Message, state: FSMContext):
     await state.update_data(title_ru=message.text.strip())
     await state.set_state(AddInstruction.description_en)
     await message.answer("Step 3/7: Description (EN)")
 
-@router.message(AddInstruction.description_en)
+@router.message(AddInstruction.description_en, F.text, ~F.text.startswith('/'))
 async def add_desc_en(message: Message, state: FSMContext):
     await state.update_data(description_en=message.text.strip())
     await state.set_state(AddInstruction.description_ru)
     await message.answer("Step 4/7: Description (RU)")
 
-@router.message(AddInstruction.description_ru)
+@router.message(AddInstruction.description_ru, F.text, ~F.text.startswith('/'))
 async def add_desc_ru(message: Message, state: FSMContext):
     await state.update_data(description_ru=message.text.strip())
     await state.set_state(AddInstruction.price)
     await message.answer("Step 5/7: Price in USD (number, e.g. 9.99)")
 
-@router.message(AddInstruction.price)
+@router.message(AddInstruction.price, F.text, ~F.text.startswith('/'))
 async def add_price(message: Message, state: FSMContext):
     try:
         price = float(message.text.replace(",", ".").strip())
@@ -63,13 +73,13 @@ async def add_price(message: Message, state: FSMContext):
     await state.set_state(AddInstruction.content_en)
     await message.answer("Step 6/7: Content (EN) - full instruction text")
 
-@router.message(AddInstruction.content_en)
+@router.message(AddInstruction.content_en, F.text, ~F.text.startswith('/'))
 async def add_content_en(message: Message, state: FSMContext):
     await state.update_data(content_en=message.text.strip())
     await state.set_state(AddInstruction.content_ru)
     await message.answer("Step 7/7: Content (RU) - full instruction text")
 
-@router.message(AddInstruction.content_ru)
+@router.message(AddInstruction.content_ru, F.text, ~F.text.startswith('/'))
 async def add_content_ru(message: Message, state: FSMContext):
     data = await state.get_data()
     try:
@@ -84,10 +94,3 @@ async def add_content_ru(message: Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"❌ Error adding instruction: {e}")
         await state.clear()
-
-@router.message(Command("cancel"))
-async def cancel(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
-    await state.clear()
-    await message.answer("Cancelled.")
