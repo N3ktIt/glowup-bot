@@ -38,6 +38,25 @@ async def cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Cancelled.")
 
+@router.message(Command("purchases"))
+async def cmd_purchases(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    rows = await database.list_purchases(20)
+    if not rows:
+        await message.answer("No purchases yet.")
+        return
+    lines = ["🧾 Recent purchases:"]
+    for r in rows:
+        title = r.get('title_en') or f"Instruction #{r['instruction_id']}"
+        status = r['status']
+        paid = "✅" if status == 'paid' else "⏳"
+        lines.append(f"{paid} #{r['id']} | {title} | ${r['amount']:.2f} | user {r['user_id']} | {status}")
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        text = text[:4000]
+    await message.answer(text)
+
 @router.message(AddInstruction.title_en, F.text, ~F.text.startswith('/'))
 async def add_title_en(message: Message, state: FSMContext):
     await state.update_data(title_en=message.text.strip())

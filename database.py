@@ -130,3 +130,15 @@ async def mark_paid(payment_id):
         await conn.execute("UPDATE purchases SET status='paid', paid_at=NOW() WHERE payment_id=$1", payment_id)
         row = await conn.fetchrow("SELECT user_id, instruction_id FROM purchases WHERE payment_id=$1", payment_id)
         return (row['user_id'], row['instruction_id']) if row else None
+
+async def list_purchases(limit=20):
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT p.id, p.user_id, p.instruction_id, p.payment_id, p.amount, p.status, p.paid_at,
+                      i.title_en
+               FROM purchases p
+               LEFT JOIN instructions i ON p.instruction_id = i.id
+               ORDER BY p.id DESC LIMIT $1""",
+            limit
+        )
+        return [dict(r) for r in rows]
