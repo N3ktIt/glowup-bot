@@ -72,14 +72,18 @@ async def add_content_en(message: Message, state: FSMContext):
 @router.message(AddInstruction.content_ru)
 async def add_content_ru(message: Message, state: FSMContext):
     data = await state.get_data()
-    await database.add_instruction(
-        data['title_en'], data['title_ru'],
-        data['description_en'], data['description_ru'],
-        data['price'],
-        data['content_en'], message.text.strip()
-    )
-    await state.clear()
-    await message.answer("✅ Instruction added!")
+    try:
+        await database.add_instruction(
+            data['title_en'], data['title_ru'],
+            data['description_en'], data['description_ru'],
+            data['price'],
+            data['content_en'], message.text.strip()
+        )
+        await state.clear()
+        await message.answer("✅ Instruction added!")
+    except Exception as e:
+        await message.answer(f"❌ Error adding instruction: {e}")
+        await state.clear()
 
 @router.message(Command("cancel"))
 async def cancel(message: Message, state: FSMContext):
