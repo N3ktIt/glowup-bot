@@ -27,11 +27,9 @@ async def init_db():
             content_ru TEXT,
             is_active INTEGER DEFAULT 1
         )''')
-        # Migrations for old schema
-        for col in ["title_en", "title_ru", "description_en", "description_ru", "content_en", "content_ru"]:
+        # Migrations for old schema / compatibility
+        for col in ["title", "description", "content", "title_en", "title_ru", "description_en", "description_ru", "content_en", "content_ru"]:
             try:
-                if col == "price":
-                    continue
                 await db.execute(f"ALTER TABLE instructions ADD COLUMN {col} TEXT")
             except Exception:
                 pass
