@@ -94,9 +94,13 @@ async def add_price(message: Message, state: FSMContext):
 
 @router.message(AddInstruction.content_en, F.text, ~F.text.startswith('/'))
 async def add_content_en(message: Message, state: FSMContext):
-    await state.update_data(content_en=message.text.strip())
-    await state.set_state(AddInstruction.content_ru)
-    await message.answer("Step 7/7: Content (RU) - full instruction text")
+    try:
+        content = message.text.strip()
+        await state.update_data(content_en=content)
+        await state.set_state(AddInstruction.content_ru)
+        await message.answer(f"Step 7/7: Content (RU) - full instruction text\n(EN saved: {len(content)} chars)")
+    except Exception as e:
+        await message.answer(f"❌ Error at step 6: {e}")
 
 @router.message(AddInstruction.content_ru, F.text, ~F.text.startswith('/'))
 async def add_content_ru(message: Message, state: FSMContext):
