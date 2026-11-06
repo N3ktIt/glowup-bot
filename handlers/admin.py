@@ -219,18 +219,43 @@ async def cmd_setcontent(message: Message, state: FSMContext):
         await message.answer("Not found.")
         return
     await state.set_state(EditContent.waiting)
-    await state.update_data(instr_id=instr_id, lang=lang)
-    await message.answer(f"Send new content ({lang}) for #{instr_id}. /cancel to stop.")
+    await state.update_data(instr_id=instr_id, lang=lang, buffer="")
+    await message.answer(
+        f"Send new content ({lang}) for #{instr_id}.\n"
+        "You can send multiple messages if it's long.\n"
+        "Send /done to save, /cancel to abort."
+    )
+
+@router.message(Command("done"))
+async def cmd_done(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    current = await state.get_state()
+    if current != EditContent.waiting.state:
+        return
+    data = await state.get_data()
+    instr_id = data['instr_id']
+    lang = data['lang']
+    content = (data.get('buffer') or '').strip()
+    if not content:
+        await message.answer("Content is empty. Send text first or /cancel.")
+        return
+    field = f"content_{lang}"
+    await database.update_instruction_field(instr_id, field, content)
+    await state.clear()
+    await message.answer(f"✅ Content ({lang}) updated for #{instr_id} ({len(content)} chars)")
 
 @router.message(EditContent.waiting, F.text, ~F.text.startswith('/'))
 async def setcontent_waiting(message: Message, state: FSMContext):
     data = await state.get_data()
-    instr_id = data['instr_id']
-    lang = data['lang']
-    field = f"content_{lang}"
-    await database.update_instruction_field(instr_id, field, message.text.strip())
-    await state.clear()
-    await message.answer(f"✅ Content ({lang}) updated for #{instr_id}")
+    buffer = data.get('buffer') or ''
+    chunk = message.text.rstrip()
+    if buffer:
+        buffer += "\n\n" + chunk
+    else:
+        buffer = chunk
+    await state.update_data(buffer=buffer)
+    await message.answer(f"Added ({len(chunk)} chars). Total: {len(buffer)} chars. Send more or /done to save.")
 
 @router.message(Command("fullinst"))
 async def cmd_fullinst(message: Message):
