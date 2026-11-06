@@ -142,3 +142,8 @@ async def list_purchases(limit=20):
             limit
         )
         return [dict(r) for r in rows]
+
+async def delete_instruction(instruction_id):
+    async with pool.acquire() as conn:
+        result = await conn.execute("DELETE FROM instructions WHERE id=$1", instruction_id)
+        return result.endswith("1")

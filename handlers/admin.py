@@ -57,6 +57,36 @@ async def cmd_purchases(message: Message):
         text = text[:4000]
     await message.answer(text)
 
+@router.message(Command("instructions"))
+async def cmd_instructions(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    rows = await database.get_instructions()
+    if not rows:
+        await message.answer("No instructions found.")
+        return
+    lines = ["📚 Instructions:"]
+    for r in rows:
+        title = r.get('title_en') or r.get('title') or f"#{r['id']}"
+        lines.append(f"#{r['id']} | {title} | ${float(r['price']):.2f}")
+    await message.answer("\n".join(lines))
+
+@router.message(Command("delinst"))
+async def cmd_delinst(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.answer("Usage: /delinst <id>")
+        return
+    try:
+        instr_id = int(parts[1])
+    except ValueError:
+        await message.answer("Invalid id")
+        return
+    ok = await database.delete_instruction(instr_id)
+    await message.answer("Deleted." if ok else "Not found.")
+
 @router.message(AddInstruction.title_en, F.text, ~F.text.startswith('/'))
 async def add_title_en(message: Message, state: FSMContext):
     await state.update_data(title_en=message.text.strip())
