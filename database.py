@@ -147,3 +147,22 @@ async def delete_instruction(instruction_id):
     async with pool.acquire() as conn:
         result = await conn.execute("DELETE FROM instructions WHERE id=$1", instruction_id)
         return result.endswith("1")
+
+async def update_instruction_field(instruction_id, field, value):
+    allowed = {
+        'price', 'title_en', 'title_ru', 'description_en', 'description_ru',
+        'content_en', 'content_ru', 'title', 'description', 'content', 'is_active'
+    }
+    if field not in allowed:
+        return False
+    async with pool.acquire() as conn:
+        # also update legacy mirror fields if needed
+        if field == 'title_en':
+            await conn.execute("UPDATE instructions SET title_en=$1, title=$1 WHERE id=$2", value, instruction_id)
+        elif field == 'description_en':
+            await conn.execute("UPDATE instructions SET description_en=$1, description=$1 WHERE id=$2", value, instruction_id)
+        elif field == 'content_en':
+            await conn.execute("UPDATE instructions SET content_en=$1, content=$1 WHERE id=$2", value, instruction_id)
+        else:
+            await conn.execute(f"UPDATE instructions SET {field}=$1 WHERE id=$2", value, instruction_id)
+        return True

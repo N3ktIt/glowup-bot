@@ -18,6 +18,9 @@ class AddInstruction(StatesGroup):
     content_en = State()
     content_ru = State()
 
+class EditContent(StatesGroup):
+    waiting = State()
+
 def is_admin(user_id: int) -> bool:
     return user_id == config.ADMIN_ID
 
@@ -114,11 +117,120 @@ async def cmd_viewinst(message: Message):
         f"EN desc: {trunc(instr.get('description_en'), 200)}\n"
         f"RU desc: {trunc(instr.get('description_ru'), 200)}\n\n"
         f"EN content:\n{trunc(instr.get('content_en'), 900)}\n\n"
-        f"RU content:\n{trunc(instr.get('content_ru'), 900)}"
+        f"RU content:\n{trunc(instr.get('content_ru'), 900)}\n\n"
+        f"Edit: /setprice {instr['id']} 9.99 | /settitle {instr['id']} en Title | /setcontent {instr['id']} en"
     )
     if len(text) > 4000:
         text = text[:4000]
     await message.answer(text)
+
+@router.message(Command("setprice"))
+async def cmd_setprice(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer("Usage: /setprice <id> <price>")
+        return
+    try:
+        instr_id = int(parts[1])
+        price = float(parts[2].replace(',', '.'))
+    except ValueError:
+        await message.answer("Invalid id or price")
+        return
+    instr = await database.get_instruction(instr_id)
+    if not instr:
+        await message.answer("Not found.")
+        return
+    await database.update_instruction_field(instr_id, 'price', price)
+    await message.answer(f"✅ Price updated for #{instr_id}: ${price:.2f}")
+
+@router.message(Command("settitle"))
+async def cmd_settitle(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=3)
+    if len(parts) < 4:
+        await message.answer("Usage: /settitle <id> <en|ru> <title>")
+        return
+    try:
+        instr_id = int(parts[1])
+    except ValueError:
+        await message.answer("Invalid id")
+        return
+    lang = parts[2].lower()
+    if lang not in ('en', 'ru'):
+        await message.answer("Language must be en or ru")
+        return
+    value = parts[3].strip()
+    instr = await database.get_instruction(instr_id)
+    if not instr:
+        await message.answer("Not found.")
+        return
+    field = f"title_{lang}"
+    await database.update_instruction_field(instr_id, field, value)
+    await message.answer(f"✅ Title ({lang}) updated for #{instr_id}")
+
+@router.message(Command("setdesc"))
+async def cmd_setdesc(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split(maxsplit=3)
+    if len(parts) < 4:
+        await message.answer("Usage: /setdesc <id> <en|ru> <description>")
+        return
+    try:
+        instr_id = int(parts[1])
+    except ValueError:
+        await message.answer("Invalid id")
+        return
+    lang = parts[2].lower()
+    if lang not in ('en', 'ru'):
+        await message.answer("Language must be en or ru")
+        return
+    value = parts[3].strip()
+    instr = await database.get_instruction(instr_id)
+    if not instr:
+        await message.answer("Not found.")
+        return
+    field = f"description_{lang}"
+    await database.update_instruction_field(instr_id, field, value)
+    await message.answer(f"✅ Description ({lang}) updated for #{instr_id}")
+
+@router.message(Command("setcontent"))
+async def cmd_setcontent(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer("Usage: /setcontent <id> <en|ru>")
+        return
+    try:
+        instr_id = int(parts[1])
+    except ValueError:
+        await message.answer("Invalid id")
+        return
+    lang = parts[2].lower()
+    if lang not in ('en', 'ru'):
+        await message.answer("Language must be en or ru")
+        return
+    instr = await database.get_instruction(instr_id)
+    if not instr:
+        await message.answer("Not found.")
+        return
+    await state.set_state(EditContent.waiting)
+    await state.update_data(instr_id=instr_id, lang=lang)
+    await message.answer(f"Send new content ({lang}) for #{instr_id}. /cancel to stop.")
+
+@router.message(EditContent.waiting, F.text, ~F.text.startswith('/'))
+async def setcontent_waiting(message: Message, state: FSMContext):
+    data = await state.get_data()
+    instr_id = data['instr_id']
+    lang = data['lang']
+    field = f"content_{lang}"
+    await database.update_instruction_field(instr_id, field, message.text.strip())
+    await state.clear()
+    await message.answer(f"✅ Content ({lang}) updated for #{instr_id}")
 
 @router.message(AddInstruction.title_en, F.text, ~F.text.startswith('/'))
 async def add_title_en(message: Message, state: FSMContext):
