@@ -87,6 +87,39 @@ async def cmd_delinst(message: Message):
     ok = await database.delete_instruction(instr_id)
     await message.answer("Deleted." if ok else "Not found.")
 
+@router.message(Command("viewinst"))
+async def cmd_viewinst(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.answer("Usage: /viewinst <id>")
+        return
+    try:
+        instr_id = int(parts[1])
+    except ValueError:
+        await message.answer("Invalid id")
+        return
+    instr = await database.get_instruction(instr_id)
+    if not instr:
+        await message.answer("Not found.")
+        return
+    def trunc(s, n=800):
+        s = s or ''
+        return s if len(s) <= n else s[:n] + '\n... [truncated]'
+    text = (
+        f"#{instr['id']} ${float(instr['price']):.2f}\n\n"
+        f"EN title: {instr.get('title_en') or ''}\n"
+        f"RU title: {instr.get('title_ru') or ''}\n\n"
+        f"EN desc: {trunc(instr.get('description_en'), 200)}\n"
+        f"RU desc: {trunc(instr.get('description_ru'), 200)}\n\n"
+        f"EN content:\n{trunc(instr.get('content_en'), 900)}\n\n"
+        f"RU content:\n{trunc(instr.get('content_ru'), 900)}"
+    )
+    if len(text) > 4000:
+        text = text[:4000]
+    await message.answer(text)
+
 @router.message(AddInstruction.title_en, F.text, ~F.text.startswith('/'))
 async def add_title_en(message: Message, state: FSMContext):
     await state.update_data(title_en=message.text.strip())
