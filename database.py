@@ -166,3 +166,30 @@ async def update_instruction_field(instruction_id, field, value):
         else:
             await conn.execute(f"UPDATE instructions SET {field}=$1 WHERE id=$2", value, instruction_id)
         return True
+
+async def grant_access(user_id, instruction_id):
+    async with pool.acquire() as conn:
+        # if already has access, do nothing
+        row = await conn.fetchrow(
+            "SELECT id FROM purchases WHERE user_id=$1 AND instruction_id=$2 AND status='paid'",
+            user_id, instruction_id
+        )
+        if row:
+            return False
+        payment_id = f"manual_{user_id}_{instruction_id}"
+        await conn.execute(
+            """INSERT INTO purchases (user_id, instruction_id, payment_id, amount, status, paid_at)
+               VALUES ($1,$2,$3,0,'paid',NOW())
+               ON CONFLICT (payment_id) DO UPDATE SET status='paid', paid_at=NOW()""",
+            user_id, instruction_id, payment_id
+        )
+        return True
+
+async def find_user_by_username(username):
+    username = username.lstrip('@').lower()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT user_id, username, first_name FROM users WHERE lower(username)=$1",
+            username
+        )
+        return dict(row) if row else None

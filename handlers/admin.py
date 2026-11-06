@@ -232,6 +232,80 @@ async def setcontent_waiting(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(f"✅ Content ({lang}) updated for #{instr_id}")
 
+@router.message(Command("fullinst"))
+async def cmd_fullinst(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.answer("Usage: /fullinst <id> [en|ru]")
+        return
+    try:
+        instr_id = int(parts[1])
+    except ValueError:
+        await message.answer("Invalid id")
+        return
+    lang = parts[2].lower() if len(parts) > 2 else 'en'
+    if lang not in ('en', 'ru'):
+        lang = 'en'
+    instr = await database.get_instruction(instr_id)
+    if not instr:
+        await message.answer("Not found.")
+        return
+    title = instr.get(f'title_{lang}') or instr.get('title_en') or instr.get('title') or f'#{instr_id}'
+    content = instr.get(f'content_{lang}') or ''
+    header = f"📖 #{instr_id} {title} ({lang.upper()})\n\n"
+    text = header + (content if content else '[empty]')
+    # split into chunks
+    for i in range(0, len(text), 4000):
+        await message.answer(text[i:i+4000])
+
+@router.message(Command("grant"))
+async def cmd_grant(message: Message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer("Usage: /grant <user_id_or_@username> <instruction_id>")
+        return
+    target = parts[1].strip()
+    try:
+        instr_id = int(parts[2])
+    except ValueError:
+        await message.answer("Invalid instruction id")
+        return
+    instr = await database.get_instruction(instr_id)
+    if not instr:
+        await message.answer("Instruction not found.")
+        return
+
+    # resolve user
+    user_id = None
+    if target.lstrip('-').isdigit():
+        user_id = int(target)
+    else:
+        u = await database.find_user_by_username(target)
+        if not u:
+            await message.answer("User not found in database. They must start the bot first, or use numeric user ID.")
+            return
+        user_id = u['user_id']
+
+    created = await database.grant_access(user_id, instr_id)
+    if not created:
+        await message.answer(f"User {user_id} already has access to #{instr_id}.")
+    else:
+        await message.answer(f"✅ Access granted: user {user_id} -> instruction #{instr_id}")
+    # notify user
+    try:
+        lang = await database.get_user_lang(user_id)
+        title = instr.get(f'title_{lang}') or instr.get('title_en') or instr.get('title') or f'#{instr_id}'
+        content = instr.get(f'content_{lang}') or instr.get('content_en') or 'Content will be added soon.'
+        msg = f"🎁 You received access!\n\n📖 {title}\n\n{content}"
+        for i in range(0, len(msg), 4000):
+            await message.bot.send_message(user_id, msg[i:i+4000])
+    except Exception as e:
+        await message.answer(f"(Granted, but could not notify user: {e})")
+
 @router.message(AddInstruction.title_en, F.text, ~F.text.startswith('/'))
 async def add_title_en(message: Message, state: FSMContext):
     await state.update_data(title_en=message.text.strip())
